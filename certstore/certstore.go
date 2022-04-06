@@ -17,6 +17,10 @@ func Open() (Store, error) {
 	return openStore()
 }
 
+func OpenSpecificStore(storeType StoreType, name string) (Store, error) {
+	return openSpecificStore(storeType, name)
+}
+
 // Store represents the system's certificate store.
 type Store interface {
 	// Identities gets a list of identities from the store.

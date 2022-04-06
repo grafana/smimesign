@@ -75,8 +75,74 @@ type winStore struct {
 	store C.HCERTSTORE
 }
 
+type StoreType int
+
+const (
+	CurrentUser StoreType = iota
+	LocalMachine
+	CurrentService
+	Services
+	Users
+	LocalMachineEnterprise
+)
+
+func (s StoreType) toWinStoreType() C.ulong {
+	switch s {
+	case CurrentUser:
+		return C.CERT_SYSTEM_STORE_CURRENT_USER
+	case LocalMachine:
+		return C.CERT_SYSTEM_STORE_LOCAL_MACHINE
+	case CurrentService:
+		return C.CERT_SYSTEM_STORE_CURRENT_SERVICE
+	case Services:
+		return C.CERT_SYSTEM_STORE_SERVICES
+	case Users:
+		return C.CERT_SYSTEM_STORE_USERS
+	case LocalMachineEnterprise:
+		return C.CERT_SYSTEM_STORE_LOCAL_MACHINE_ENTERPRISE
+	}
+	return 0
+}
+
+func StringToStoreType(st string) (StoreType, error) {
+	switch st {
+	case "CurrentUser":
+		return CurrentUser, nil
+	case "LocalMachine":
+		return LocalMachine, nil
+	case "CurrentService":
+		return CurrentService, nil
+	case "Services":
+		return Services, nil
+	case "Users":
+		return Users, nil
+	case "LocalMachineEnterprise":
+		return LocalMachineEnterprise, nil
+	}
+	return 0, fmt.Errorf("unable to match string %s", st)
+}
+
 // openStore opens the current user's personal cert store.
 func openStore() (*winStore, error) {
+	return openSpecificStore(CurrentUser, "MY")
+}
+
+func openSpecificStore(storeType StoreType, name string) (*winStore, error) {
+	storeName := unsafe.Pointer(stringToUTF16(name))
+	defer C.free(storeName)
+	st := storeType.toWinStoreType()
+	store := C.CertOpenStore(CERT_STORE_PROV_SYSTEM_W, 0, 0, st | C.CERT_STORE_MAXIMUM_ALLOWED_FLAG , storeName)
+	if store == nil {
+		return nil, lastError("failed to open system cert store")
+	}
+
+	return &winStore{store}, nil
+}
+
+// openStore opens the current user's personal cert store.
+func openAllStores() ([]*winStore, error) {
+
+	stores := make([]*winStore, 0)
 	storeName := unsafe.Pointer(stringToUTF16("MY"))
 	defer C.free(storeName)
 
@@ -84,8 +150,9 @@ func openStore() (*winStore, error) {
 	if store == nil {
 		return nil, lastError("failed to open system cert store")
 	}
+	stores = append(stores, &winStore{store})
 
-	return &winStore{store}, nil
+	return stores, nil
 }
 
 // Identities implements the Store interface.
