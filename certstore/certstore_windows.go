@@ -104,24 +104,6 @@ func (s StoreType) toWinStoreType() C.ulong {
 	return 0
 }
 
-func StringToStoreType(st string) (StoreType, error) {
-	switch st {
-	case "CurrentUser":
-		return CurrentUser, nil
-	case "LocalMachine":
-		return LocalMachine, nil
-	case "CurrentService":
-		return CurrentService, nil
-	case "Services":
-		return Services, nil
-	case "Users":
-		return Users, nil
-	case "LocalMachineEnterprise":
-		return LocalMachineEnterprise, nil
-	}
-	return 0, fmt.Errorf("unable to match string %s", st)
-}
-
 // openStore opens the current user's personal cert store.
 func openStore() (*winStore, error) {
 	return openSpecificStore(CurrentUser, "MY")
@@ -131,28 +113,12 @@ func openSpecificStore(storeType StoreType, name string) (*winStore, error) {
 	storeName := unsafe.Pointer(stringToUTF16(name))
 	defer C.free(storeName)
 	st := storeType.toWinStoreType()
-	store := C.CertOpenStore(CERT_STORE_PROV_SYSTEM_W, 0, 0, st | C.CERT_STORE_MAXIMUM_ALLOWED_FLAG , storeName)
+	store := C.CertOpenStore(CERT_STORE_PROV_SYSTEM_W, 0, 0, st|C.CERT_STORE_MAXIMUM_ALLOWED_FLAG, storeName)
 	if store == nil {
 		return nil, lastError("failed to open system cert store")
 	}
 
 	return &winStore{store}, nil
-}
-
-// openStore opens the current user's personal cert store.
-func openAllStores() ([]*winStore, error) {
-
-	stores := make([]*winStore, 0)
-	storeName := unsafe.Pointer(stringToUTF16("MY"))
-	defer C.free(storeName)
-
-	store := C.CertOpenStore(CERT_STORE_PROV_SYSTEM_W, 0, 0, C.CERT_SYSTEM_STORE_CURRENT_USER, storeName)
-	if store == nil {
-		return nil, lastError("failed to open system cert store")
-	}
-	stores = append(stores, &winStore{store})
-
-	return stores, nil
 }
 
 // Identities implements the Store interface.
@@ -424,7 +390,7 @@ func (wpk *winPrivateKey) Public() crypto.PublicKey {
 }
 
 // Sign implements the crypto.Signer interface.
-func (wpk *winPrivateKey) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
+func (wpk *winPrivateKey) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
 	if wpk.capiProv != 0 {
 		return wpk.capiSignHash(opts.HashFunc(), digest)
 	} else if wpk.cngHandle != 0 {
@@ -704,7 +670,8 @@ func (c errCode) Error() string {
 	if cmsg == nil {
 		return fmt.Sprintf("Error %X", int(c))
 	}
-	defer C.LocalFree(C.HLOCAL(cmsg))
+	// See https://github.com/golang/go/issues/51726#issuecomment-1069615452.
+	defer C.LocalFree(C.HLOCAL(unsafe.Pointer(cmsg)))
 
 	gomsg := C.GoString(cmsg)
 
