@@ -104,6 +104,24 @@ func (s StoreType) toWinStoreType() C.ulong {
 	return 0
 }
 
+func StringToStoreType(st string) (StoreType, error) {
+	switch st {
+	case "CurrentUser":
+		return CurrentUser, nil
+	case "LocalMachine":
+		return LocalMachine, nil
+	case "CurrentService":
+		return CurrentService, nil
+	case "Services":
+		return Services, nil
+	case "Users":
+		return Users, nil
+	case "LocalMachineEnterprise":
+		return LocalMachineEnterprise, nil
+	}
+	return 0, fmt.Errorf("unable to match string %s", st)
+}
+
 // openStore opens the current user's personal cert store.
 func openStore() (*winStore, error) {
 	return openSpecificStore(CurrentUser, "MY")
@@ -119,6 +137,22 @@ func openSpecificStore(storeType StoreType, name string) (*winStore, error) {
 	}
 
 	return &winStore{store}, nil
+}
+
+// openStore opens the current user's personal cert store.
+func openAllStores() ([]*winStore, error) {
+
+	stores := make([]*winStore, 0)
+	storeName := unsafe.Pointer(stringToUTF16("MY"))
+	defer C.free(storeName)
+
+	store := C.CertOpenStore(CERT_STORE_PROV_SYSTEM_W, 0, 0, C.CERT_SYSTEM_STORE_CURRENT_USER, storeName)
+	if store == nil {
+		return nil, lastError("failed to open system cert store")
+	}
+	stores = append(stores, &winStore{store})
+
+	return stores, nil
 }
 
 // Identities implements the Store interface.
