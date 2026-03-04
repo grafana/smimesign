@@ -1,21 +1,27 @@
-on: [push, pull_request]
-name: Test macOS
 jobs:
   test:
     strategy:
+      fail-fast: false
       matrix:
-        go-version: ["1.14", "1.x"]
-        os: [macos-latest]
+        include:
+          - go-version: "1.17"
+            os: macos-13
+          - go-version: "1.x" 
+            os: macos-latest
+
     runs-on: ${{ matrix.os }}
     env:
       CGO_ENABLED: 1
+
     steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
       - name: Install Go
-        uses: actions/setup-go@v2
+        # zizmor: ignore[cache-poisoning]
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: ${{ matrix.go-version }}
-      - name: Checkout code
-        uses: actions/checkout@v2
+
       - name: Test
-        run: |
-          go test -v ./...
+        run: go test -v ./...
